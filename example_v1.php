@@ -17,7 +17,7 @@ class example_v1  {
     }		
    
     //common vars
-    private $exchange_code ='EXCH';
+    private $exchange_code ='BTRX';
     private $exchange_market ='LTC/BTC'; 
     private $auth_id=0;  
     
