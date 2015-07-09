@@ -1,0 +1,2 @@
+# api
+Coinigy API Examples
