@@ -1,19 +1,19 @@
 
 var socketCluster = require('socketcluster-client');
-var config = require("config.json");
 
 var api_credentials =
 {
-    "apiKey"    : "api_key",
-    "apiSecret" : "generate_at_coinigy_website"
+    "apiKey"    : "",
+    "apiSecret" : ""
 }
 
 var options = {
-    hostname  : config.sc_host,    
-    port      : config.sc_port
+    hostname  : "sc-01.coinigy.com",    
+    port      : "443",
+    secure    : "true"
 };
 
-
+console.log(options);
 var SCsocket = socketCluster.connect(options);
 
 
@@ -30,32 +30,34 @@ SCsocket.on('connect', function (status) {
         
         if (!err && token) {            
 
-            var scChannel = SCsocket.subscribe("ORDER-BTRX--LTC--BTC");
-            
+            var scChannel = SCsocket.subscribe("TRADE-OK--BTC--CNY");
+            console.log(scChannel);
             scChannel.watch(function (data) {
                 console.log(data);
-            });    
-            
-            
-            var scChannel = SCsocket.subscribe("ORDER-BTRX--LTC--BTC");
-            
-            scChannel.watch(function (data) {
-                console.log(data);
-            }); 
+            });      
             
             SCsocket.emit("exchanges", null, function (err, data) {
                 if (!err) {                  
                     console.log(data);
-                }
+                } else {
+                    console.log(err)
+                }   
             });
             
             
-            SCsocket.emit("channels", "BTRX", function (err, data) {
+            SCsocket.emit("channels", "OK", function (err, data) {
                 if (!err) {
                     console.log(data);
-                }
+                } else {
+                    console.log(err)
+                }   
             }); 
+        } else {
+            console.log(err)
         }   
     });   
 });
+
+
+
 
