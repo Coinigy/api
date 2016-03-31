@@ -9,17 +9,25 @@ alerts = namedtuple('alerts', ('open_alerts', 'alert_history'))
 
 
 class CoinigyREST:
-    '''
+    """
         This class implements coinigy's REST api as documented in the documentation
         available at
         https://github.com/coinigy/api
-    '''
+    """
     def __init__(self, acct):
         self.api = acct.api
         self.secret = acct.secret
         self.endpoint = acct.endpoint
 
     def request(self, method, query=None, json=False, **args):
+        """
+        Generic interface to REST api
+        :param method:  query name
+        :param query:   dictionary of inputs
+        :param json:    if True return the raw results in json format
+        :param args:    keyword arguments added to the payload
+        :return:
+        """
         url = '{endpoint}/{method}'.format(endpoint=self.endpoint, method=method)
         payload = {'X-API-KEY': self.api, 'X-API-SECRET': self.secret}
         payload.update(**args)
@@ -35,6 +43,13 @@ class CoinigyREST:
         return pd.DataFrame(r.json()['data'])
 
     def data(self, exchange, market, data_type):
+        """
+        Common wrapper for data related queries
+        :param exchange:
+        :param market:
+        :param data_type: currently supported are 'history', 'bids', 'asks', 'orders'
+        :return:
+        """
         d = self.request('data', exchange_code=exchange, exchange_market=market, type=data_type, json=True)['data']
 
         res = dict()
@@ -51,10 +66,12 @@ class CoinigyREST:
                 if 'time_local' in dat.columns:
                     dat.time_local = pd.to_datetime(dat.time_local)
                     dat.set_index('time_local', inplace=True)
-
                 if 'type' in dat.columns:
                     dat.type = dat.type.astype(str)
-
+                if not dat.empty:
+                    dat['base_ccy'] = d['primary_curr_code']
+                    dat['counter_ccy'] = d['secondary_curr_code']
+                    
                 res[key] = dat
 
         return res
@@ -71,8 +88,11 @@ class CoinigyREST:
     def push_notifications(self):
         return self.request('pushNotifications')
 
-    def orders(self):
-        return self.request('orders')
+    def open_orders(self):
+        """
+            FIXME: untested
+        """
+        return self.request('orders', json=True)
 
     def alerts(self):
         all_alerts = self.request('alerts', json=True)['data']
@@ -96,7 +116,7 @@ class CoinigyREST:
         return self.data(exchange=exchange, market=market, data_type='bids')['bids']
 
     def orders(self, exchange, market):
-        return self.request('data', exchange_code=exchange, exchange_market=market, type='orders')
+        return self.data(exchange=exchange, market=market, data_type='orders')
 
     def news_feed(self):
         dat = self.request('newsFeed')
@@ -124,6 +144,9 @@ class CoinigyREST:
         return self.request('deleteAlert', alert_id=alert_id, json=True)['notifications']
 
     def add_order(self, auth_id, exch_id, mkt_id, order_type_id, price_type_id, limit_price, stop_price, order_quantity):
+        """
+        FIXME: untested
+        """
         return self.request('addOrder',
                             auth_id = auth_id,
                             exch_id=exch_id,
