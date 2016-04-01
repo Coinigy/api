@@ -160,3 +160,18 @@ class CoinigyREST:
 
     def cancel_order(self, order_id):
         return self.request('cancelOrder', internal_order_id=order_id, json=True)
+
+    def balance_history(self, date):
+        """
+        NB: the timestamp columns is the time when the account was last snapshot, not the time the balances were
+            effectively refreshed
+        :param date:    date str in format YYYY-MM-DD
+        :return:        a view of the acccount balances as of the date provided
+        """
+        bh = pd.DataFrame.from_records(self.request('balanceHistory', date=date, json=True)['data']['balance_history'])
+        if bh.empty:
+            return bh
+        acct = self.accounts()[['auth_id', 'exch_name']]
+        return pd.merge(bh, acct, on='auth_id', how='left')
+
+
