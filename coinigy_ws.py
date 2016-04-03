@@ -8,8 +8,8 @@
     This implementation is using AutoBahn Twisted and is a modified version of a script written by Jesper Nohr
     https://bitbucket.org/snippets/jespern/6rBz9
 
-    NNB: note that after you have run one time a file coinigy.token will be created and used for subsequent
-         authentication so your key and secret will no longer be necessary
+    NB: note that after you have authenticated yourself once (with the --api argument) a file coinigy.token will be 
+        created and used for subsequent authentication so your key and secret will no longer be necessary
 """
 import argparse
 from autobahn.twisted.websocket import WebSocketClientProtocol, \
@@ -25,7 +25,6 @@ from twisted.internet import reactor, ssl
 pd.set_option('display.width', 200)
 log.startLogging(sys.stdout)
 
-# API information
 _END_POINT = u"wss://sc-01.coinigy.com:443"
 
 
