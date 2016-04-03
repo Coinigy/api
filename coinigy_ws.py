@@ -8,7 +8,6 @@
     This implementation is using AutoBahn Twisted and is a modified version of a script written by Jesper Nohr
     https://bitbucket.org/snippets/jespern/6rBz9
 
-    NB:  in order to run this script please edit __API_KEY and __API_SECRET with your information
     NNB: note that after you have run one time a file coinigy.token will be created and used for subsequent
          authentication so your key and secret will no longer be necessary
 """
@@ -16,6 +15,7 @@ import argparse
 from autobahn.twisted.websocket import WebSocketClientProtocol, \
     WebSocketClientFactory, connectWS
 import json
+import os
 import pandas as pd
 import random
 import sys
@@ -26,8 +26,6 @@ pd.set_option('display.width', 200)
 log.startLogging(sys.stdout)
 
 # API information
-_API_KEY = '<YOUR PUBLIC KEY HERE>'
-_API_SECRET = '<YOUR SECRET HERE>'
 _END_POINT = u"wss://sc-01.coinigy.com:443"
 
 
@@ -98,6 +96,9 @@ class AuthHandler(object):
             fp.write(token)
 
     def load(self):
+	if not os.path.exists(self.path):
+            return None
+
         with open(self.path, 'r') as fp:
             data = fp.read()
 
@@ -131,6 +132,10 @@ class CoinigyWSClient(WebSocketClientProtocol):
     @classmethod
     def subscriptions(cls):
         return dict()
+
+    @classmethod
+    def api(cls):
+        return dict(apiKey='', apiSecret='')
 
     def call_id_gen(self):
         self._cid += 1
@@ -244,7 +249,7 @@ class CoinigyWSClient(WebSocketClientProtocol):
     def handshake_callback(self, data):
         print("HANDSHAKE CALLBACK")
 
-        self.emit_raw('auth', dict(apiKey=_API_KEY, apiSecret=_API_SECRET), self.auth_callback)
+        self.emit_raw('auth', self.api(), self.auth_callback)
 
     def handle_command(self, data):
         # Server told us to do something.
@@ -285,10 +290,18 @@ class CoinigyWSClient(WebSocketClientProtocol):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--trades', help="trade channels, eg TRADE-OK--BTC--CNY", nargs='*', default=[])
-    parser.add_argument('--orders', help="order channels, eg ORDER-OK--BTC--CNY", nargs='*', default=[])
+    parser.add_argument('--api', help='api key/secret', nargs=2, metavar=('key', 'secret'))
+    parser.add_argument('--trades', help='trade channels, eg TRADE-OK--BTC--CNY', nargs='*', default=[])
+    parser.add_argument('--orders', help='order channels, eg ORDER-OK--BTC--CNY', nargs='*', default=[])
     args = parser.parse_args()
 
+    api_info=dict(key='',secret='')
+    if args.api:
+	def api(cls):
+	    return dict(apiKey=args.api[0],apiSecret=args.api[1])
+
+	CoinigyWSClient.api = api
+	 
     all_subs = dict()
     for channel in args.trades:
         all_subs[channel] = 'trade'
@@ -299,8 +312,7 @@ if __name__ == '__main__':
     def subscriptions(cls):
         return all_subs
 
-    print args
-    print 'SUBSCRIPTIONS: {}'.format(subscriptions('toto'))
+    print 'SUBSCRIPTIONS REQUIRED: {}'.format(subscriptions('toto'))
 
     CoinigyWSClient.subscriptions = subscriptions
 
