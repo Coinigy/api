@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 """
     A basic example of how to subscribe to channels in coinigy websocket api
 
@@ -10,20 +12,47 @@
 
     NB: note that after you have authenticated yourself once (with the --api argument) a file coinigy.token will be 
         created and used for subsequent authentication so your key and secret will no longer be necessary
+
+    1) The configs can be provided in json form (see coinigy_ws_config.json)
+        "api":              credentials for authentication
+        "subscriptions"     trade/order channels one wishes to subscribe to
+        "publishers"        output files for trade/order data, if not provided will default to stdout/log file
+
+    2) If the log file is not provided as an input (--out) then it will default to stdout
+
+    3) When launched a console mode allows to interact with the WebSocketClient protocol. Depending on the command
+       one will get outputs either in the console if the method returns something, or some acks can appear in the log
+       file
+
+       examples:
+        a) get the configuration provided
+        >>> send config
+
+        b) perform a new subscriptiopn
+        >>> send subscribe TRADE-OK--BTC--CNY trade
+
+        c) perform a unsubscription
+        >>> send unsubscribe TRADE-OK--BTC--CNY
+
+    4) Example launch
+        ./coinigy_ws.py --out ws.log --config coinigy_ws_config.json
+
+
 """
 import argparse
-from autobahn.twisted.websocket import WebSocketClientProtocol, \
-    WebSocketClientFactory, connectWS
+from autobahn.twisted.websocket import WebSocketClientProtocol, WebSocketClientFactory, connectWS
+import csv
 import json
 import os
 import pandas as pd
 import random
 import sys
+from twisted.internet import reactor, ssl, stdio, defer
 from twisted.python import log
-from twisted.internet import reactor, ssl
+from utils.console import Console
+
 
 pd.set_option('display.width', 200)
-log.startLogging(sys.stdout)
 
 _END_POINT = u"wss://sc-01.coinigy.com:443"
 
@@ -63,25 +92,53 @@ def stringify(obj):
 
 # The next 2 classes handle the publication of channel messages
 class TradePublisher:
-    def __init__(self, channel=None):
-        self._channel = channel
 
-    def publish(self, data):
-        print ' '.join(['{k}={v}'.format(k=k, v=str(v)) for k, v in data.iteritems()])
+    def __init__(self, cfg):
+        self._file = None
+        self._writer = None
+        self.setup(cfg)
+
+    def __del__(self):
+        self._file.close()
+
+    def setup(self, cfg):
+        outfile = cfg.get('trade', None)
+        if outfile is not None and os.path.exists(outfile):
+            print("[TradePublisher] will publish in {}".format(outfile))
+            self._file = open(outfile, 'a+')
+            self._writer = csv.DictWriter(
+                self._file,
+                fieldnames=['time_local', 'market_history_id', 'exchange', 'label', 'type', 'price', 'quantity', 'total'])
+        else:
+            print("[TradePublisher] will publish in {}".format(outfile))
+
+    def publish(self, channel, data):
+        if self._writer is None:
+            print ' '.join(['{k}={v}'.format(k=k, v=str(v)) for k, v in data.iteritems()])
+        else:
+            self._writer.writerow(data)
 
 
 class OrderPublisher:
-    def __init__(self, channel=None):
-        self._channel = channel
+    def __init__(self, cfg):
+        self._file = None
+        self.setup(cfg)
 
-    def publish(self, data):
-        print('[OrderPublisher][{}]'.format(self._channel))
-        print(pd.DataFrame.from_records(data))
+    def setup(self, cfg):
+        outfile = cfg.get('order', None)
+        if outfile is not None and os.path.exists(outfile):
+            print("[OrderPublisher] will publish in {}".format(outfile))
+            self._file = open(outfile, 'a+')
+        else:
+            print("[OrderPublisher] will publish on stdout")
 
-__CHANNEL_MANAGERS__ = dict(
-    trade=TradePublisher,
-    order=OrderPublisher
-)
+    def publish(self, channel, data):
+        df = pd.DataFrame.from_records(data)
+        if self._file is not None:
+            df.to_csv(self._file)
+        else:
+            print('[OrderPublisher][{}]'.format(channel))
+            print(df)
 
 
 class AuthHandler(object):
@@ -95,7 +152,7 @@ class AuthHandler(object):
             fp.write(token)
 
     def load(self):
-	if not os.path.exists(self.path):
+        if not os.path.exists(self.path):
             return None
 
         with open(self.path, 'r') as fp:
@@ -108,7 +165,7 @@ class CoinigyWSClient(WebSocketClientProtocol):
     """
     WebSocket-based protocol which can communicate with Coinigy's WS API
     """
-    def __init__(self, *args, **kwargs):
+    def __init__(self, config, *args, **kwargs):
         print("Init client protocol.")
 
         # every call to the server is assigned a unique id 'cid'
@@ -126,15 +183,29 @@ class CoinigyWSClient(WebSocketClientProtocol):
         # indirection
         self._channel2rid = {}
 
+        #config
+        self._config = config
+
+        #channel managers
+        publish_cfg = config.get('publishers', dict())
+        self._publishers = dict(
+            trade=TradePublisher(publish_cfg),
+            order=OrderPublisher(publish_cfg)
+        )
+
         super(CoinigyWSClient, self).__init__(*args, **kwargs)
 
-    @classmethod
-    def subscriptions(cls):
-        return dict()
+    def __del__(self):
+        print("garbage collect")
 
-    @classmethod
-    def api(cls):
-        return dict(apiKey='', apiSecret='')
+    def config(self):
+        return self._config
+
+    def subscriptions(self):
+        return self.config().get('subscriptions', dict(trade=[], order=[]))
+
+    def api(self):
+        return self.config().get('api', dict(apiKey='', apiSecret=''))
 
     def call_id_gen(self):
         self._cid += 1
@@ -223,21 +294,31 @@ class CoinigyWSClient(WebSocketClientProtocol):
 
         # send a couple of queries
         # FIXME: not sure it's the right place or time to do that!
-        self.emit_raw('channels', None, self.handle_channels)
-        self.emit_raw('exchanges', None, self.handle_exchanges)
+        self.exchanges()
+        self.channels()
 
-        print('performing subscription to {} channels'.format(len(self.subscriptions())))
-        for channel_name, channel_type in self.subscriptions().iteritems():
-            self.channel_subscribe(channel_name, channel_type)
+        subs = self.subscriptions()
+        for channel_type in self._publishers.keys():
+            channels = subs.get(channel_type, [])
+            print("[SUBSCRIBE] {type}: {channels}".format(type=channel_type, channels=channels))
+            for channel_name in channels:
+                self.subscribe(channel_name, channel_type)
 
     def handle_subscribe(self, data):
         print("SUBSCRIPTION CALLBACK")
         if 'rid' in data.keys():
             print("acked subscription to channel {0}".format(self._requests[data['rid']]['_event']['data']))
 
+    def handle_unsubscribe(self, data):
+        print("UNSUBSCRIBE CALLBACK")
+        if 'rid' in data.keys():
+            print("acked unsubscription to channel {}".format(self._requests[data['rid']]['_event']['data']))
+
     def handle_exchanges(self, data):
         print("EXCHANGES CALLBACK")
-        print(data)
+        edata, status = data['data']
+        print(status)
+        print(pd.DataFrame.from_records(edata))
 
     def handle_channels(self, data):
         print("CHANNEL CALLBACK")
@@ -260,13 +341,13 @@ class CoinigyWSClient(WebSocketClientProtocol):
             token = data.get('data').get('token')
             self._auth.save(token)
         if event == '#publish':
-            self.channel_publish(data['data'])
+            self.publish(data['data'])
         else:
             print("Unhandled server event: {0}".format(event))
 
     # CHANNELS MANAGEMENT
-    def channel_subscribe(self, channel, channel_type):
-        chan_manager = __CHANNEL_MANAGERS__[channel_type](channel)
+    def subscribe(self, channel, channel_type):
+        chan_manager = self._publishers[channel_type]
         cid = self.emit_raw(event='#subscribe',
                             data=channel,
                             callback=self.handle_subscribe,
@@ -275,7 +356,17 @@ class CoinigyWSClient(WebSocketClientProtocol):
             print('[_subscribe] cid={cid} channel={channel}'.format(channel=channel, cid=cid))
         self._channel2rid[channel] = cid
 
-    def channel_publish(self, data):
+    def unsubscribe(self, channel):
+        sub_id = self._channel2rid.get(channel, -1)
+        if sub_id < 0:
+            print("[unsubscribe error] could not find cid of subscription to {}".format(channel))
+            return
+        self.emit_raw(event='#unsubscribe',
+                            data=channel,
+                            callback=self.handle_unsubscribe,
+                            sub_id=sub_id)
+
+    def publish(self, data):
         if self._debug:
             print('PUBLISH CALLBACK')
 
@@ -283,39 +374,105 @@ class CoinigyWSClient(WebSocketClientProtocol):
         cid = self._channel2rid[channel]
         cdata = data['data']
         manager = self._requests[cid]['channel_manager']
-        manager.publish(cdata)
+        manager.publish(channel=channel, data=cdata)
 
+    def exchanges(self):
+        self.emit_raw('exchanges', None, self.handle_channels)
+
+    def channels(self):
+        self.emit_raw('channels', None, self.handle_exchanges)
+
+
+# have user interface controller
+class CoinigyWSClientFactory(WebSocketClientFactory):
+
+    def __init__(self, addr, contr, config):
+        self._instance = None
+        self._controller = contr
+        self._config = config
+
+        super(CoinigyWSClientFactory, self).__init__(addr)
+
+    def buildProtocol(self, *args, **kwargs):
+        proto = CoinigyWSClient(config=self._config)
+        proto.factory = self
+        self._instance = proto
+        self._controller.set_protocol(proto)
+        return proto
+
+    def instance(self):
+        return self._instance
+
+
+class Controller(Console):
+
+    def __init__(self):
+        print("[CREATE CONTROLLER]")
+        self._protocol = None
+
+    def __del__(self):
+        print("[DELETE CONTROLLER]")
+
+    def set_protocol(self, proto):
+        print("set_protocol {}".format(type(proto)))
+        self._protocol = proto
+
+    def do_send(self, fn, *args, **kwargs):
+        """send commands to the WebSocketClient"""
+        d = defer.Deferred()
+        d.addCallback(self.printResult)
+        if self._protocol is not None:
+            reactor.callLater(0, d.callback, getattr(self._protocol, fn)(*args, **kwargs))
+            return d
+
+    def do_protocol(self):
+        """execute method from the WebSocketClient protocol"""
+        self.printResult(type(self._protocol))
+
+    def do_list(self):
+        """list available methods from WebSocketClient protocol"""
+        if self._protocol is not None:
+            self.printResult('\n'.join([str(cmd) for cmd in dir(self._protocol)]))
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
+    parser.add_argument('--out', help='output file', default='stdout')
+    parser.add_argument('--mode', help='output mode', choices=['csv', 'std'])
     parser.add_argument('--api', help='api key/secret', nargs=2, metavar=('key', 'secret'))
-    parser.add_argument('--trades', help='trade channels, eg TRADE-OK--BTC--CNY', nargs='*', default=[])
-    parser.add_argument('--orders', help='order channels, eg ORDER-OK--BTC--CNY', nargs='*', default=[])
+    parser.add_argument('--trades', help='trade channels, eg TRADE-OK--BTC--CNY', nargs='*', default=None)
+    parser.add_argument('--orders', help='order channels, eg ORDER-OK--BTC--CNY', nargs='*', default=None)
+    parser.add_argument('--config', help='config file', default=None)
+
     args = parser.parse_args()
+    output = args.out
+    if output == 'stdout':
+        log.startLogging(sys.stdout)
+    else:
+        log.startLogging(open(output, 'w+'))
 
-    api_info=dict(key='',secret='')
+    # read the config file if any and apply overrides to it as requested
+    config_dict = dict()
+    if args.config is not None and os.path.exists(args.config):
+        with open(args.config) as config_file:
+            config_dict.update(json.load(config_file))
+
     if args.api:
-	def api(cls):
-	    return dict(apiKey=args.api[0],apiSecret=args.api[1])
+        config_dict['api'] = dict(apiKey=args.api[0], apiSecret=args.api[1])
 
-	CoinigyWSClient.api = api
-	 
-    all_subs = dict()
-    for channel in args.trades:
-        all_subs[channel] = 'trade'
+    if args.trades is not None:
+        config_dict.setdefault('subscriptions', dict())['trade'] = args.trades
 
-    for channel in args.orders:
-        all_subs[channel] = 'order'
+    if args.orders is not None:
+        config_dict.setdefault('subscriptions', dict())['order'] = args.orders
 
-    def subscriptions(cls):
-        return all_subs
+    print("[CONFIG] {}".format(config_dict))
 
-    print 'SUBSCRIPTIONS REQUIRED: {}'.format(subscriptions('toto'))
+    # ui
+    controller = Controller()
+    stdio.StandardIO(controller)
 
-    CoinigyWSClient.subscriptions = subscriptions
-
-    factory = WebSocketClientFactory(_END_POINT)
+    factory = CoinigyWSClientFactory(_END_POINT, controller, config_dict)
     factory.protocol = CoinigyWSClient
 
     if factory.isSecure:
