@@ -1,0 +1,21 @@
+{
+  "api": {
+    "apiKey": "xxx",
+    "apiSecret": "xxx"
+  },
+
+  "subscriptions": {
+    "trade": [
+      "TRADE-OK--BTC--CNY",
+      "TRADE-BITF--BTC--USD",
+    ],
+    "order": [
+      "ORDER-OK--BTC--USD",
+    ]
+  },
+
+  "publishers": {
+    "trade": "./data/trades.csv",
+    "order": "./data/orders.csv"
+  }
+}
