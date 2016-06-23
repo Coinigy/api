@@ -6,4 +6,4 @@ Here you will find issue tracking, docs, and code examples for all Coinigy devel
 
 REST HTTP API docs located here: https://goo.gl/MmXQPu
 
-WEBSOCKET API docs located here: 
+WEBSOCKET API docs located here: https://github.com/SocketCluster/socketcluster-client/blob/master/socketcluster.js
