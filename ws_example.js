@@ -9,7 +9,7 @@ var api_credentials =
 }
 
 var options = {
-    hostname  : "sc-01.coinigy.com",    
+    hostname  : "sc-02.coinigy.com",    
     port      : "443",
     secure    : "true"
 };

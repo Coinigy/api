@@ -54,7 +54,7 @@ from utils.console import Console
 
 pd.set_option('display.width', 200)
 
-_END_POINT = u"wss://sc-01.coinigy.com:443"
+_END_POINT = u"wss://sc-02.coinigy.com:443"
 
 
 # Incomplete port of sc-format npm package, enough to get it working for me, though.
