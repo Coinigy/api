@@ -1,5 +1,5 @@
 
-//run "npm install socketcluster-client@2.3.15" in terminal before attempting to use
+//run "npm install socketcluster-client" in terminal before attempting to use
 var socketCluster = require('socketcluster-client');
 
 var api_credentials =
