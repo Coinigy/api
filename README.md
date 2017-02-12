@@ -10,6 +10,4 @@ WEBSOCKET API docs located here: Coming soon!
 
 WEBSOCKET CLIENTS:
 
-https://github.com/SocketCluster/socketcluster-client/blob/master/socketcluster.js
-
-https://github.com/coinigy/api/blob/master/coinigy_ws.py
+https://github.com/SocketCluster/client-drivers
