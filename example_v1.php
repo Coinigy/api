@@ -29,7 +29,7 @@ class coinigy_api_example_v1  {
         //see API docs for more info
         $this->coinigy_api_key = '';
         $this->coinigy_api_secret = '';
-        $this->endpoint = 'https://www.coinigy.com/api/v1/'; //with trailing slash
+        $this->endpoint = 'https://api.coinigy.com/api/v1/'; //with trailing slash
     }
     
     
