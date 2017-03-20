@@ -4,7 +4,7 @@ Here you will find issue tracking, docs, and code examples for all Coinigy devel
 
 
 
-REST HTTP API docs located here: https://goo.gl/MmXQPu
+REST HTTP API docs located here: http://docs.coinigy.apiary.io/#reference
 
 WEBSOCKET API docs located here: Coming soon!
 
