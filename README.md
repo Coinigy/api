@@ -10,7 +10,7 @@ WEBSOCKET API docs located here: Coming soon!
 
 WEBSOCKET SERVER INFO:
 
-HOST: sc-02.coinigy.com
+HOST: sc-02.coinigy.com*
 
 PORT: 443
 
@@ -20,3 +20,5 @@ SECURE: true
 WEBSOCKET CLIENTS:
 
 https://github.com/SocketCluster/client-drivers
+
+*If your client requires the full wss url for websockets, use: wss://sc-01.coinigy.com/socketcluster/
