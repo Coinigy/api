@@ -14,6 +14,7 @@ class CoinigyREST:
         available at
         https://github.com/coinigy/api
     """
+
     def __init__(self, acct):
         self.api = acct.api
         self.secret = acct.secret
@@ -35,7 +36,7 @@ class CoinigyREST:
             payload.update(query)
         r = requests.post(url, data=payload)
         if 'error' in r.json().keys():
-            print r.json()['error']
+            print(r.json()['error'])
             return
 
         if json:
@@ -71,7 +72,7 @@ class CoinigyREST:
                 if not dat.empty:
                     dat['base_ccy'] = d['primary_curr_code']
                     dat['counter_ccy'] = d['secondary_curr_code']
-                    
+
                 res[key] = dat
 
         return res
@@ -82,8 +83,8 @@ class CoinigyREST:
     def activity(self):
         return self.request('activity')
 
-    def balances(self):
-        return self.request('balances')
+    def balances(self, auth_id):
+        return self.request('balances', auth_ids=auth_id)
 
     def push_notifications(self):
         return self.request('pushNotifications')
@@ -104,7 +105,10 @@ class CoinigyREST:
         return self.request('exchanges')
 
     def markets(self, exchange):
-        return self.request('markets',exchange_code=exchange)
+        return self.request('markets', exchange_code=exchange)
+
+    def ticker(self, exchange_code, exchange_market):
+        return self.request('ticker', exchange_code=exchange_code, exchange_market=exchange_market)
 
     def history(self, exchange, market):
         return self.data(exchange=exchange, market=market, data_type='history')['history']
@@ -129,8 +133,8 @@ class CoinigyREST:
         return dict(order_types=pd.DataFrame.from_records(dat['order_types']),
                     price_types=pd.DataFrame.from_records(dat['price_types']))
 
-    def refresh_balance(self):
-        return self.request('refreshBalance', json=True)
+    def refresh_balance(self, auth_id):
+        return self.request('refreshBalance', auth_id=auth_id, json=True)
 
     def add_alert(self, exchange, market, price, note):
         return self.request('addAlert',
@@ -143,12 +147,13 @@ class CoinigyREST:
     def delete_alert(self, alert_id):
         return self.request('deleteAlert', alert_id=alert_id, json=True)['notifications']
 
-    def add_order(self, auth_id, exch_id, mkt_id, order_type_id, price_type_id, limit_price, stop_price, order_quantity):
+    def add_order(self, auth_id, exch_id, mkt_id, order_type_id, price_type_id, limit_price, stop_price,
+                  order_quantity):
         """
         FIXME: untested
         """
         return self.request('addOrder',
-                            auth_id = auth_id,
+                            auth_id=auth_id,
                             exch_id=exch_id,
                             mkt_id=mkt_id,
                             order_type_id=order_type_id,
@@ -173,5 +178,3 @@ class CoinigyREST:
             return bh
         acct = self.accounts()[['auth_id', 'exch_name']]
         return pd.merge(bh, acct, on='auth_id', how='left')
-
-
