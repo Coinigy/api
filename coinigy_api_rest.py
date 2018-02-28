@@ -29,13 +29,14 @@ class CoinigyREST:
         :return:
         """
         url = '{endpoint}/{method}'.format(endpoint=self.endpoint, method=method)
-        payload = {'X-API-KEY': self.api, 'X-API-SECRET': self.secret}
+        authAPI = {'X-API-KEY': self.api, 'X-API-SECRET': self.secret}
+        payload = {}
         payload.update(**args)
         if query is not None:
             payload.update(query)
-        r = requests.post(url, data=payload)
+        r = requests.post(url, data=payload, headers=authAPI)
         if 'error' in r.json().keys():
-            print r.json()['error']
+            print(r.json()['error'])
             return
 
         if json:
@@ -175,3 +176,9 @@ class CoinigyREST:
         return pd.merge(bh, acct, on='auth_id', how='left')
 
 
+if __name__ == "__main__":
+    credentials.api = "actual/from_file_or_env"
+    credentials.secret = "actual/from_file_or_env"
+    credentials.endpoint = "https://api.coinigy.com/api/v1/"
+    cr = CoinigyREST(credentials)
+    print(cr.balances())
