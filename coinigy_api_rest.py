@@ -65,7 +65,7 @@ class CoinigyREST:
                 if 'total' in dat.columns:
                     dat.total = dat.total.astype(np.float)
                 if 'time_local' in dat.columns:
-                    dat.time_local = pd.to_datetime(dat.time_local)
+                    dat.time_local = pd.to_datetime(dat.time_local, format='%Y-%m-%d %H:%M:%S')
                     dat.set_index('time_local', inplace=True)
                 if 'type' in dat.columns:
                     dat.type = dat.type.astype(str)
