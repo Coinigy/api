@@ -3,7 +3,7 @@
 This repository contains example API clients that demonstrate connecting to the Coinigy API.
 
 V1 REST API documentation: http://docs.coinigy.apiary.io/#reference  
-V2 REST API documentation: https://api.coinigy.com/api/v2/docs/index.html  
+V2 REST API documentation: https://api.coinigy.com/api/v2/docs
 
 WEBSOCKET API documentation (Requires a V1 key): https://coinigy.docs.apiary.io/#reference/websocket-api  
 
